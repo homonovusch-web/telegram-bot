@@ -844,8 +844,8 @@ def main():
 
     # Avvio bot
     print("Bot avviato...")
-    app.run_polling()
-
+    # app.run_polling()  # RIMUOVI QUESTA RIGA
+    
 if __name__ == "__main__":
     if "IL_TUO_TOKEN" in TOKEN or TOKEN == "IL_TUO_TOKEN":
         raise SystemExit("Imposta il TOKEN del bot prima di avviare.")
