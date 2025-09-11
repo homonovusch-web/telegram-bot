@@ -836,19 +836,31 @@ def main():
         allow_reentry=True,
     )
 
-    # Handlers admin e media
+       # Handlers admin e media
     app.add_handler(conv_handler)
     app.add_handler(CommandHandler("admin", admin_cmd))
     app.add_handler(CallbackQueryHandler(admin_cb, pattern="^(page_|det_|delask_|del_|cancel_del|export_csv|photos_|zip_|noop)"))
     app.add_handler(MessageHandler(filters.PHOTO, handle_user_photo))
 
-    # Avvio bot
-    print("Bot avviato...")
-    # app.run_polling()  # RIMUOVI QUESTA RIGA
-    
+    # AVVIO BOT CON GESTIONE ERRORI (SOSTITUISCI APP.RUN_POLLING() CON QUESTO)
+    try:
+        print("Bot avviato... In attesa di messaggi...")
+        app.run_polling()
+    except Exception as e:
+        print(f"❌ Errore durante l'avvio: {e}")
+        print("🔄 Tentativo di riavvio in 10 secondi...")
+        time.sleep(10)
+        # Non riavviare automaticamente, Render gestisce il restart
+
 if __name__ == "__main__":
     if "IL_TUO_TOKEN" in TOKEN or TOKEN == "IL_TUO_TOKEN":
-        raise SystemExit("Imposta il TOKEN del bot prima di avviare.")
+        raise SystemExit("❌ Imposta il TOKEN del bot prima di avviare.")
     if ADMIN_ID == 5749973037:
-        print("Avviso: ricordati di impostare ADMIN_ID con il tuo user_id Telegram.")
-    main()
+        print("⚠️ Avviso: ricordati di impostare ADMIN_ID con il tuo user_id Telegram.")
+    
+    # Aggiungi gestione errori globale
+    try:
+        main()
+    except Exception as e:
+        print(f"❌ Errore critico: {e}")
+        print("💤 Il servizio rimane attivo in attesa di riavvio...")
