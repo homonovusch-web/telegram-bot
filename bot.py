@@ -17,6 +17,25 @@ flask_thread = threading.Thread(target=run_flask)
 flask_thread.daemon = True
 flask_thread.start()
 
+import requests
+import threading
+import time
+
+def keep_alive():
+    """Funzione per mantenere attivo il servizio Render"""
+    while True:
+        try:
+            # Effettua una richiesta al tuo stesso servizio ogni 10 minuti
+            requests.get("https://telegram-bot-pqkg.onrender.com")
+            time.sleep(600)  # 10 minuti
+        except:
+            time.sleep(60)
+
+# Avvia il thread keep-alive
+keep_alive_thread = threading.Thread(target=keep_alive)
+keep_alive_thread.daemon = True
+keep_alive_thread.start()
+
 # ========== IL TUO CODICE ESISTENTE INIZIA QUI SOTTO ==========
 import os
 import csv
