@@ -835,22 +835,13 @@ def main():
         fallbacks=[CommandHandler("cancel", cancel)],
         allow_reentry=True,
     )
-
-       # Handlers admin e media
+    # Handlers admin e media
     app.add_handler(conv_handler)
     app.add_handler(CommandHandler("admin", admin_cmd))
     app.add_handler(CallbackQueryHandler(admin_cb, pattern="^(page_|det_|delask_|del_|cancel_del|export_csv|photos_|zip_|noop)"))
     app.add_handler(MessageHandler(filters.PHOTO, handle_user_photo))
 
-    # AVVIO BOT CON GESTIONE ERRORI (SOSTITUISCI APP.RUN_POLLING() CON QUESTO)
-    try:
-        print("Bot avviato... In attesa di messaggi...")
-        app.run_polling()
-    except Exception as e:
-        print(f"❌ Errore durante l'avvio: {e}")
-        print("🔄 Tentativo di riavvio in 10 secondi...")
-        time.sleep(10)
-        # Non riavviare automaticamente, Render gestisce il restart
+    # NON mettere niente qui! L'avvio del bot viene gestito dopo
 
 if __name__ == "__main__":
     if "IL_TUO_TOKEN" in TOKEN or TOKEN == "IL_TUO_TOKEN":
@@ -858,9 +849,31 @@ if __name__ == "__main__":
     if ADMIN_ID == 5749973037:
         print("⚠️ Avviso: ricordati di impostare ADMIN_ID con il tuo user_id Telegram.")
     
-    # Aggiungi gestione errori globale
-    try:
-        main()
-    except Exception as e:
-        print(f"❌ Errore critico: {e}")
-        print("💤 Il servizio rimane attivo in attesa di riavvio...")
+    # GESTIONE ERRORI COMPLETA
+    from telegram.error import TimedOut, NetworkError
+    import time
+    
+    def run_bot():
+        try:
+            print("Bot avviato... In attesa di messaggi...")
+            app.run_polling(
+                drop_pending_updates=True,
+                timeout=30,
+                connect_timeout=30,
+                read_timeout=30
+            )
+        except (TimedOut, NetworkError) as e:
+            print(f"❌ Errore di connessione Telegram: {e}")
+            print("🔄 Riavvio in 10 secondi...")
+            time.sleep(10)
+            run_bot()  # Riavvio automatico
+        except Exception as e:
+            print(f"❌ Errore imprevisto: {e}")
+            print("🔄 Riavvio in 30 secondi...")
+            time.sleep(30)
+            run_bot()  # Riavvio automatico
+    
+    # Avvia il bot
+    run_bot()
+  
+   
