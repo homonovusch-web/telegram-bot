@@ -11,20 +11,22 @@ PAGE_SIZE = 5
 os.makedirs(MEDIA_DIR, exist_ok=True)
 
 # Inizializza Flask per mantenere attivo il bot
-app = Flask(__name__)
-WEBHOOK_URL = f"https://{os.environ.get('RENDER_EXTERNAL_HOSTNAME', 'localhost')}/{TOKEN}"
-
-@app.route('/')
-def home():
-    return "Il bot Telegram è attivo e funzionante!"
-
-# Route che riceve gli update da Telegram
 @app.route(f"/{TOKEN}", methods=["POST"])
 def webhook():
-    update = request.get_json(force=True)
-    if update:
-        application.update_queue.put_nowait(Update.de_json(update, application.bot))
-    return "ok"
+    data = request.get_json(force=True)
+    if not data:
+        return "no data", 400
+    try:
+        upd = Update.de_json(data, application.bot)
+        # Inoltra l'update direttamente al loop asincrono del bot
+        import asyncio
+        future = asyncio.run_coroutine_threadsafe(application.process_update(upd), bot_event_loop)
+        # Non blocchiamo Flask: risultato ignorato
+    except Exception as e:
+        print(f"Webhook error: {e}")
+        return "error", 500
+    return "ok", 200
+
 
 # ========== IL TUO CODICE ESISTENTE INIZIA QUI SOTTO ==========
 import csv
@@ -781,6 +783,9 @@ async def cancel(update: Update, context: ContextTypes.DEFAULT_TYPE):
 # Costruiamo Application e disattiviamo l'Updater (usiamo webhook via Flask)
 application = Application.builder().token(TOKEN).updater(None).build()
 
+# Event loop globale del bot (verrà creato nel main)
+bot_event_loop = None
+
 if __name__ == "__main__":
     init_db()
 
@@ -830,10 +835,8 @@ if __name__ == "__main__":
     )
     application.add_handler(MessageHandler(filters.PHOTO, handle_user_photo))
 
-    # --- Avvio PERSISTENTE dell'Application su un event loop in background ---
+    # --- Avvio PERSISTENTE dell'Application su un event loop dedicato ---
     import asyncio, threading
-
-    loop = asyncio.new_event_loop()
 
     async def start_bot():
         await application.initialize()
@@ -842,11 +845,12 @@ if __name__ == "__main__":
         print(f"✅ Webhook impostato su {WEBHOOK_URL}")
 
     def run_loop():
-        asyncio.set_event_loop(loop)
-        # start l'app e poi tieni vivo il loop
-        loop.run_until_complete(start_bot())
-        loop.run_forever()
+        asyncio.set_event_loop(bot_event_loop)
+        bot_event_loop.run_until_complete(start_bot())
+        bot_event_loop.run_forever()
 
+    # Crea il loop e avvialo in background
+    bot_event_loop = asyncio.new_event_loop()
     threading.Thread(target=run_loop, daemon=True).start()
 
     # --- Avvio del server WSGI (porta visibile a Render) ---
