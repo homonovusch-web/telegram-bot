@@ -822,16 +822,23 @@ if __name__ == "__main__":
     # Handlers admin e media
     application.add_handler(conv_handler)
     application.add_handler(CommandHandler("admin", admin_cmd))
-    application.add_handler(CallbackQueryHandler(admin_cb, pattern="^(page_|det_|delask_|del_|cancel_del|export_csv|photos_|zip_|noop)"))
+    application.add_handler(
+        CallbackQueryHandler(
+            admin_cb,
+            pattern="^(page_|det_|delask_|del_|cancel_del|export_csv|photos_|zip_|noop)"
+        )
+    )
     application.add_handler(MessageHandler(filters.PHOTO, handle_user_photo))
 
-    # imposta il webhook
+    # imposta e avvia il webhook + application
     import asyncio
-    async def set_webhook():
+    async def setup():
+        await application.initialize()
+        await application.start()
         await application.bot.set_webhook(WEBHOOK_URL)
         print(f"✅ Webhook impostato su {WEBHOOK_URL}")
 
-    asyncio.run(set_webhook())
+    asyncio.run(setup())
 
-    # avvia Flask
+    # avvia Flask per ricevere le richieste
     app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 10000)))
