@@ -779,7 +779,8 @@ async def cancel(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 # ================== MAIN LOOP ==================
 # Costruiamo Application direttamente nel blocco __main__
-application = Application.builder().token(TOKEN).build()
+# Disattiviamo l'Updater perché usiamo webhook con Flask
+application = Application.builder().token(TOKEN).updater(None).build()
 
 if __name__ == "__main__":
     init_db()
@@ -830,16 +831,18 @@ if __name__ == "__main__":
     )
     application.add_handler(MessageHandler(filters.PHOTO, handle_user_photo))
 
-    # imposta e avvia il webhook + application
+    # imposta e avvia l'application in modalità webhook
     import asyncio
     async def setup():
+        # inizializza e avvia i task interni (job queue, dispatcher, ecc.)
         await application.initialize()
         await application.start()
+        # registra/aggiorna il webhook
         await application.bot.set_webhook(WEBHOOK_URL)
         print(f"✅ Webhook impostato su {WEBHOOK_URL}")
 
     asyncio.run(setup())
 
-    # avvia Flask per ricevere le richieste
+    # Avvia un server WSGI di produzione, così Render rileva la porta
     from waitress import serve
-serve(app, host="0.0.0.0", port=int(os.environ.get("PORT", 10000)))
+    serve(app, host="0.0.0.0", port=int(os.environ.get("PORT", 10000)))
