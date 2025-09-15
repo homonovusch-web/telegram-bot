@@ -1,8 +1,18 @@
 from flask import Flask, request
 import os
 
+# ================== CONFIG ==================
+TOKEN = "8458591477:AAGqIzFaYe-3DtWc45r24-hQPYyH4P4SIzY"
+ADMIN_ID = 5749973037
+DB_PATH = "utenti.db"
+MEDIA_DIR = "media"
+PAGE_SIZE = 5
+
+os.makedirs(MEDIA_DIR, exist_ok=True)
+
 # Inizializza Flask per mantenere attivo il bot
 app = Flask(__name__)
+WEBHOOK_URL = f"https://{os.environ.get('RENDER_EXTERNAL_HOSTNAME', 'localhost')}/{TOKEN}"
 
 @app.route('/')
 def home():
@@ -17,7 +27,6 @@ def webhook():
     return "ok"
 
 # ========== IL TUO CODICE ESISTENTE INIZIA QUI SOTTO ==========
-import os
 import csv
 import sqlite3
 from io import StringIO, BytesIO
@@ -40,14 +49,6 @@ from telegram.ext import (
     filters,
 )
 
-# ================== CONFIG ==================
-TOKEN = "8458591477:AAGqIzFaYe-3DtWc45r24-hQPYyH4P4SIzY"
-ADMIN_ID = 5749973037
-DB_PATH = "utenti.db"
-MEDIA_DIR = "media"
-PAGE_SIZE = 5
-
-os.makedirs(MEDIA_DIR, exist_ok=True)
 
 # ================== STATI CONVERSAZIONE ==================
 TERMINI, LINGUA, DOMANDA1, DOMANDA2, DOMANDA3, DOMANDA4, DOMANDA5, DOMANDA6, DOMANDA7, DOMANDA8, DOMANDA9, DOMANDA10, DOMANDA11, DOMANDA12, DOMANDA13, DOMANDA14, DOMANDA15, DOMANDA16, DOMANDA17, DOMANDA18, DOMANDA19, DOMANDA20, DOMANDA21, DOMANDA22, DOMANDA23, DOMANDA24 = range(26)
