@@ -778,8 +778,7 @@ async def cancel(update: Update, context: ContextTypes.DEFAULT_TYPE):
     return ConversationHandler.END
 
 # ================== MAIN LOOP ==================
-# Costruiamo Application direttamente nel blocco __main__
-# Disattiviamo l'Updater perché usiamo webhook con Flask
+# Costruiamo Application e disattiviamo l'Updater (usiamo webhook via Flask)
 application = Application.builder().token(TOKEN).updater(None).build()
 
 if __name__ == "__main__":
@@ -831,18 +830,25 @@ if __name__ == "__main__":
     )
     application.add_handler(MessageHandler(filters.PHOTO, handle_user_photo))
 
-    # imposta e avvia l'application in modalità webhook
-    import asyncio
-    async def setup():
-        # inizializza e avvia i task interni (job queue, dispatcher, ecc.)
+    # --- Avvio PERSISTENTE dell'Application su un event loop in background ---
+    import asyncio, threading
+
+    loop = asyncio.new_event_loop()
+
+    async def start_bot():
         await application.initialize()
         await application.start()
-        # registra/aggiorna il webhook
         await application.bot.set_webhook(WEBHOOK_URL)
         print(f"✅ Webhook impostato su {WEBHOOK_URL}")
 
-    asyncio.run(setup())
+    def run_loop():
+        asyncio.set_event_loop(loop)
+        # start l'app e poi tieni vivo il loop
+        loop.run_until_complete(start_bot())
+        loop.run_forever()
 
-    # Avvia un server WSGI di produzione, così Render rileva la porta
+    threading.Thread(target=run_loop, daemon=True).start()
+
+    # --- Avvio del server WSGI (porta visibile a Render) ---
     from waitress import serve
     serve(app, host="0.0.0.0", port=int(os.environ.get("PORT", 10000)))
