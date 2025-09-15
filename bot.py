@@ -777,11 +777,11 @@ async def cancel(update: Update, context: ContextTypes.DEFAULT_TYPE):
     return ConversationHandler.END
 
 # ================== MAIN LOOP ==================
-# Elimina la funzione main() intera.
-# Costruiamo Application direttamente nel blocco __main__.
-
+# Costruiamo Application direttamente nel blocco __main__
 application = Application.builder().token(TOKEN).build()
 
+if __name__ == "__main__":
+    init_db()
 
     # Conversation per /start
     conv_handler = ConversationHandler(
@@ -817,18 +817,8 @@ application = Application.builder().token(TOKEN).build()
         fallbacks=[CommandHandler("cancel", cancel)],
         allow_reentry=True,
     )
+
     # Handlers admin e media
-    app.add_handler(conv_handler)
-    app.add_handler(CommandHandler("admin", admin_cmd))
-    app.add_handler(CallbackQueryHandler(admin_cb, pattern="^(page_|det_|delask_|del_|cancel_del|export_csv|photos_|zip_|noop)"))
-    app.add_handler(MessageHandler(filters.PHOTO, handle_user_photo))
-
-    # NON mettere niente qui! L'avvio del bot viene gestito dopo
-
-if __name__ == "__main__":
-    init_db()
-
-    # aggiungi handlers
     application.add_handler(conv_handler)
     application.add_handler(CommandHandler("admin", admin_cmd))
     application.add_handler(CallbackQueryHandler(admin_cb, pattern="^(page_|det_|delask_|del_|cancel_del|export_csv|photos_|zip_|noop)"))
@@ -844,5 +834,3 @@ if __name__ == "__main__":
 
     # avvia Flask
     app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 10000)))
-  
-   
