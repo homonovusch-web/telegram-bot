@@ -1,5 +1,4 @@
-from flask import Flask
-import threading
+from flask import Flask, request
 import os
 
 # Inizializza Flask per mantenere attivo il bot
@@ -9,32 +8,13 @@ app = Flask(__name__)
 def home():
     return "Il bot Telegram è attivo e funzionante!"
 
-def run_flask():
-    app.run(host='0.0.0.0', port=os.environ.get('PORT', 10000))
-
-# Avvia Flask in un thread separato
-flask_thread = threading.Thread(target=run_flask)
-flask_thread.daemon = True
-flask_thread.start()
-
-import requests
-import threading
-import time
-
-def keep_alive():
-    """Funzione per mantenere attivo il servizio Render"""
-    while True:
-        try:
-            # Effettua una richiesta al tuo stesso servizio ogni 10 minuti
-            requests.get("https://telegram-bot-pqkg.onrender.com")
-            time.sleep(600)  # 10 minuti
-        except:
-            time.sleep(60)
-
-# Avvia il thread keep-alive
-keep_alive_thread = threading.Thread(target=keep_alive)
-keep_alive_thread.daemon = True
-keep_alive_thread.start()
+# Route che riceve gli update da Telegram
+@app.route(f"/{TOKEN}", methods=["POST"])
+def webhook():
+    update = request.get_json(force=True)
+    if update:
+        application.update_queue.put_nowait(Update.de_json(update, application.bot))
+    return "ok"
 
 # ========== IL TUO CODICE ESISTENTE INIZIA QUI SOTTO ==========
 import os
@@ -797,9 +777,11 @@ async def cancel(update: Update, context: ContextTypes.DEFAULT_TYPE):
     return ConversationHandler.END
 
 # ================== MAIN LOOP ==================
-def main():
-    init_db()
-    app = ApplicationBuilder().token(TOKEN).build()
+# Elimina la funzione main() intera.
+# Costruiamo Application direttamente nel blocco __main__.
+
+application = Application.builder().token(TOKEN).build()
+
 
     # Conversation per /start
     conv_handler = ConversationHandler(
@@ -844,36 +826,23 @@ def main():
     # NON mettere niente qui! L'avvio del bot viene gestito dopo
 
 if __name__ == "__main__":
-    if "IL_TUO_TOKEN" in TOKEN or TOKEN == "IL_TUO_TOKEN":
-        raise SystemExit("❌ Imposta il TOKEN del bot prima di avviare.")
-    if ADMIN_ID == 5749973037:
-        print("⚠️ Avviso: ricordati di impostare ADMIN_ID con il tuo user_id Telegram.")
-    
-    # GESTIONE ERRORI COMPLETA
-    from telegram.error import TimedOut, NetworkError
-    import time
-    
-    def run_bot():
-        try:
-            print("Bot avviato... In attesa di messaggi...")
-            app.run_polling(
-                drop_pending_updates=True,
-                timeout=30,
-                connect_timeout=30,
-                read_timeout=30
-            )
-        except (TimedOut, NetworkError) as e:
-            print(f"❌ Errore di connessione Telegram: {e}")
-            print("🔄 Riavvio in 10 secondi...")
-            time.sleep(10)
-            run_bot()  # Riavvio automatico
-        except Exception as e:
-            print(f"❌ Errore imprevisto: {e}")
-            print("🔄 Riavvio in 30 secondi...")
-            time.sleep(30)
-            run_bot()  # Riavvio automatico
-    
-    # Avvia il bot
-    run_bot()
+    init_db()
+
+    # aggiungi handlers
+    application.add_handler(conv_handler)
+    application.add_handler(CommandHandler("admin", admin_cmd))
+    application.add_handler(CallbackQueryHandler(admin_cb, pattern="^(page_|det_|delask_|del_|cancel_del|export_csv|photos_|zip_|noop)"))
+    application.add_handler(MessageHandler(filters.PHOTO, handle_user_photo))
+
+    # imposta il webhook
+    import asyncio
+    async def set_webhook():
+        await application.bot.set_webhook(WEBHOOK_URL)
+        print(f"✅ Webhook impostato su {WEBHOOK_URL}")
+
+    asyncio.run(set_webhook())
+
+    # avvia Flask
+    app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 10000)))
   
    
