@@ -10,22 +10,35 @@ PAGE_SIZE = 5
 
 os.makedirs(MEDIA_DIR, exist_ok=True)
 
-# Inizializza Flask per mantenere attivo il bot
+# Inizializza Flask PRIMA delle route
+app = Flask(__name__)
+WEBHOOK_URL = f"https://{os.environ.get('RENDER_EXTERNAL_HOSTNAME', 'localhost')}/{TOKEN}"
+
+# Queste variabili verranno valorizzate nel MAIN LOOP
+application = None
+bot_event_loop = None
+
+@app.route("/")
+def home():
+    return "Il bot Telegram è attivo e funzionante!"
+
+# Route del webhook: processa l'update nel loop asincrono del bot
 @app.route(f"/{TOKEN}", methods=["POST"])
 def webhook():
     data = request.get_json(force=True)
     if not data:
         return "no data", 400
     try:
+        from telegram import Update  # import locale per evitare problemi d'ordine
         upd = Update.de_json(data, application.bot)
-        # Inoltra l'update direttamente al loop asincrono del bot
         import asyncio
-        future = asyncio.run_coroutine_threadsafe(application.process_update(upd), bot_event_loop)
-        # Non blocchiamo Flask: risultato ignorato
+        # inoltra l'update al loop del bot senza bloccare Flask
+        asyncio.run_coroutine_threadsafe(application.process_update(upd), bot_event_loop)
     except Exception as e:
         print(f"Webhook error: {e}")
         return "error", 500
     return "ok", 200
+
 
 
 # ========== IL TUO CODICE ESISTENTE INIZIA QUI SOTTO ==========
