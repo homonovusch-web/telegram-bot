@@ -40,7 +40,7 @@ from telegram import (
     InputFile,
 )
 from telegram.ext import (
-    ApplicationBuilder,
+    Application,
     CommandHandler,
     CallbackQueryHandler,
     MessageHandler,
