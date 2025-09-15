@@ -15,32 +15,55 @@ os.makedirs(MEDIA_DIR, exist_ok=True)
 app = Flask(__name__)
 WEBHOOK_URL = f"https://{os.environ.get('RENDER_EXTERNAL_HOSTNAME', 'localhost')}/{TOKEN}"
 
-# Queste variabili verranno valorizzate nel MAIN LOOP
+# Queste variabili verranno valorizzate nel MAIN LOOP (più sotto nel file)
 application = None
 bot_event_loop = None
 
+# ------------------- healthcheck / keep-alive -------------------
 @app.route("/")
 def home():
+    # Log per vedere i ping nei Runtime Logs di Render
+    print(f"[PING] GET /  ts={time.time()}", flush=True)
     return "Il bot Telegram è attivo e funzionante!"
 
-# Route del webhook: processa l'update nel loop asincrono del bot
+# Endpoint dedicato ai ping (consigliato per cron-job.org / UptimeRobot)
+@app.route("/ping")
+def ping():
+    print(f"[PING] GET /ping  ts={time.time()}", flush=True)
+    return "pong"
+
+# ------------------- webhook Telegram -------------------
 @app.route(f"/{TOKEN}", methods=["POST"])
 def webhook():
     data = request.get_json(force=True)
     if not data:
         return "no data", 400
+
+    # Se vuoi loggare in modo più dettagliato l'update:
+    try:
+        keys = list(data.keys()) if isinstance(data, dict) else str(type(data))
+        print(f"[TG] Update ricevuto, keys={keys}", flush=True)
+    except Exception:
+        pass
+
+    # Evita errori se l'application non è ancora pronta
+    global application, bot_event_loop
+    if application is None or bot_event_loop is None:
+        print("[TG] Application non pronta: update scartato (503)", flush=True)
+        return "not ready", 503
+
     try:
         from telegram import Update  # import locale per evitare problemi d'ordine
         upd = Update.de_json(data, application.bot)
+
         import asyncio
-        # inoltra l'update al loop del bot senza bloccare Flask
+        # Inoltra l'update al loop asincrono del bot senza bloccare Flask
         asyncio.run_coroutine_threadsafe(application.process_update(upd), bot_event_loop)
     except Exception as e:
-        print(f"Webhook error: {e}")
+        print(f"Webhook error: {e}", flush=True)
         return "error", 500
+
     return "ok", 200
-
-
 
 # ========== IL TUO CODICE ESISTENTE INIZIA QUI SOTTO ==========
 import csv
