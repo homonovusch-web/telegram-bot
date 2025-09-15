@@ -841,4 +841,5 @@ if __name__ == "__main__":
     asyncio.run(setup())
 
     # avvia Flask per ricevere le richieste
-    app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 10000)))
+    from waitress import serve
+serve(app, host="0.0.0.0", port=int(os.environ.get("PORT", 10000)))
