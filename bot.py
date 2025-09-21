@@ -1,8 +1,11 @@
+# bot.py
 from flask import Flask, request, abort
 import os
 import time
+import threading
+import asyncio
 
-# ================== CONFIG ==================
+# ================== CONFIG (da ENV su Render) ==================
 # ⚠️ NON mettere segreti in chiaro nel codice. Impostali su Render → Environment.
 TOKEN = os.environ["TOKEN"]                      # es.: 8458...:AA...
 TG_SECRET = os.environ["TG_SECRET"]              # es.: hex di 64 char
@@ -15,10 +18,10 @@ PAGE_SIZE = 5
 
 os.makedirs(MEDIA_DIR, exist_ok=True)
 
-# Inizializza Flask PRIMA delle route
+# ================== Flask app ==================
 app = Flask(__name__)
 
-# Variabili (se usi python-telegram-bot) che potrai settare nel main
+# Vars globali per PTB
 application = None
 bot_event_loop = None
 
@@ -26,6 +29,11 @@ bot_event_loop = None
 print(f"[BOOT] WEBHOOK_PATH={WEBHOOK_PATH}", flush=True)
 print(f"[BOOT] TOKEN set: {bool(TOKEN)}", flush=True)
 print(f"[BOOT] TG_SECRET set: {bool(TG_SECRET)}", flush=True)
+
+# Info URL atteso (solo log, non usato per setWebhook interno)
+_public_host = os.environ.get("RENDER_EXTERNAL_HOSTNAME")
+if _public_host:
+    print(f"[BOOT] Expected webhook URL: https://{_public_host}{WEBHOOK_PATH}", flush=True)
 
 # ------------------- healthcheck / keep-alive -------------------
 @app.route("/")
@@ -61,35 +69,16 @@ def webhook():
     except Exception:
         pass
 
-    # ---------- Risposta diretta di test (funziona anche senza 'application') ----------
-    try:
-        msg = data.get("message") or {}
-        chat = msg.get("chat") or {}
-        chat_id = chat.get("id")
-        text = (msg.get("text") or "").strip()
-
-        if chat_id and text == "/start":
-            # Rispondiamo subito per verificare che tutto sia ok
-            import requests
-            requests.get(
-                f"https://api.telegram.org/bot{TOKEN}/sendMessage",
-                params={"chat_id": chat_id, "text": "Bot attivo ✅ (risposta diretta dal webhook)"}
-            )
-    except Exception as e:
-        print(f"[ERROR] Direct reply failed: {e}", flush=True)
-
-    # ---------- Inoltro opzionale a python-telegram-bot se l'app è pronta ----------
+    # ---------- Inoltro a python-telegram-bot se l'app è pronta ----------
     global application, bot_event_loop
     if application is None or bot_event_loop is None:
-        # Non considerarlo errore: significa solo che stai usando la risposta diretta
+        # Non è un errore: significa solo che PTB non è ancora partito
         print("[TG] Application non pronta: salto process_update", flush=True)
         return "ok", 200
 
     try:
         from telegram import Update  # import locale per evitare problemi d'ordine
         upd = Update.de_json(data, application.bot)
-
-        import asyncio
         asyncio.run_coroutine_threadsafe(application.process_update(upd), bot_event_loop)
     except Exception as e:
         print(f"[ERROR] process_update failed: {e}", flush=True)
@@ -98,6 +87,7 @@ def webhook():
     return "ok", 200
 
 # ========== IL TUO CODICE ESISTENTE INIZIA QUI SOTTO ==========
+# (rimane invariato: funzioni, stati conversazione, handler, DB, ecc.)
 import csv
 import sqlite3
 from io import StringIO, BytesIO
@@ -119,7 +109,6 @@ from telegram.ext import (
     ConversationHandler,
     filters,
 )
-
 
 # ================== STATI CONVERSAZIONE ==================
 TERMINI, LINGUA, DOMANDA1, DOMANDA2, DOMANDA3, DOMANDA4, DOMANDA5, DOMANDA6, DOMANDA7, DOMANDA8, DOMANDA9, DOMANDA10, DOMANDA11, DOMANDA12, DOMANDA13, DOMANDA14, DOMANDA15, DOMANDA16, DOMANDA17, DOMANDA18, DOMANDA19, DOMANDA20, DOMANDA21, DOMANDA22, DOMANDA23, DOMANDA24 = range(26)
@@ -852,11 +841,16 @@ async def cancel(update: Update, context: ContextTypes.DEFAULT_TYPE):
 # Costruiamo Application e disattiviamo l'Updater (usiamo webhook via Flask)
 application = Application.builder().token(TOKEN).updater(None).build()
 
-# Event loop globale del bot (verrà creato nel main)
+# Event loop globale del bot (verrà creato sotto)
 bot_event_loop = None
 
 if __name__ == "__main__":
-    init_db()
+    # Inizializza DB (devi avere la funzione nel tuo codice)
+    try:
+        init_db()
+        print("[BOOT] DB inizializzato", flush=True)
+    except Exception as e:
+        print(f"[BOOT] init_db() errore: {e}", flush=True)
 
     # Conversation per /start
     conv_handler = ConversationHandler(
@@ -891,6 +885,7 @@ if __name__ == "__main__":
         },
         fallbacks=[CommandHandler("cancel", cancel)],
         allow_reentry=True,
+        # per_message=False  # se lo usi, accetta il warning di PTB
     )
 
     # Handlers admin e media
@@ -905,13 +900,10 @@ if __name__ == "__main__":
     application.add_handler(MessageHandler(filters.PHOTO, handle_user_photo))
 
     # --- Avvio PERSISTENTE dell'Application su un event loop dedicato ---
-    import asyncio, threading
-
     async def start_bot():
         await application.initialize()
         await application.start()
-        #await application.bot.set_webhook(WEBHOOK_URL)
-        print(f"✅ Webhook impostato su {WEBHOOK_URL}")
+        print("[BOOT] PTB Application started (no internal set_webhook)", flush=True)
 
     def run_loop():
         asyncio.set_event_loop(bot_event_loop)
@@ -920,7 +912,7 @@ if __name__ == "__main__":
 
     # Crea il loop e avvialo in background
     bot_event_loop = asyncio.new_event_loop()
-    threading.Thread(target=run_loop, daemon=True).start()
+    threading.Thread(target=run_loop, name="ptb-runner", daemon=True).start()
 
     # --- Avvio del server WSGI (porta visibile a Render) ---
     from waitress import serve
