@@ -3,7 +3,7 @@ import os
 import time
 
 # ================== CONFIG ==================
-# ⚠️ NON mettere segreti in chiaro nel codice. Leggili da ENV su Render.
+# ⚠️ NON mettere segreti in chiaro nel codice. Impostali su Render → Environment.
 TOKEN = os.environ["TOKEN"]                      # es.: 8458...:AA...
 TG_SECRET = os.environ["TG_SECRET"]              # es.: hex di 64 char
 WEBHOOK_PATH = os.environ.get("WEBHOOK_PATH", "/webhook")  # es.: /webhook-97f729a6407f517b
@@ -18,9 +18,14 @@ os.makedirs(MEDIA_DIR, exist_ok=True)
 # Inizializza Flask PRIMA delle route
 app = Flask(__name__)
 
-# Queste variabili verranno valorizzate nel MAIN LOOP (più sotto nel file)
+# Variabili (se usi python-telegram-bot) che potrai settare nel main
 application = None
 bot_event_loop = None
+
+# ------------ BOOT LOGS (per verificare ENV su Render) ------------
+print(f"[BOOT] WEBHOOK_PATH={WEBHOOK_PATH}", flush=True)
+print(f"[BOOT] TOKEN set: {bool(TOKEN)}", flush=True)
+print(f"[BOOT] TG_SECRET set: {bool(TG_SECRET)}", flush=True)
 
 # ------------------- healthcheck / keep-alive -------------------
 @app.route("/")
@@ -56,13 +61,30 @@ def webhook():
     except Exception:
         pass
 
-    # Evita errori se l'application non è ancora pronta
+    # ---------- Risposta diretta di test (funziona anche senza 'application') ----------
+    try:
+        msg = data.get("message") or {}
+        chat = msg.get("chat") or {}
+        chat_id = chat.get("id")
+        text = (msg.get("text") or "").strip()
+
+        if chat_id and text == "/start":
+            # Rispondiamo subito per verificare che tutto sia ok
+            import requests
+            requests.get(
+                f"https://api.telegram.org/bot{TOKEN}/sendMessage",
+                params={"chat_id": chat_id, "text": "Bot attivo ✅ (risposta diretta dal webhook)"}
+            )
+    except Exception as e:
+        print(f"[ERROR] Direct reply failed: {e}", flush=True)
+
+    # ---------- Inoltro opzionale a python-telegram-bot se l'app è pronta ----------
     global application, bot_event_loop
     if application is None or bot_event_loop is None:
-        print("[TG] Application non pronta: update scartato (503)", flush=True)
-        return "not ready", 503
+        # Non considerarlo errore: significa solo che stai usando la risposta diretta
+        print("[TG] Application non pronta: salto process_update", flush=True)
+        return "ok", 200
 
-    # Inoltra l'update al loop asincrono del bot (python-telegram-bot)
     try:
         from telegram import Update  # import locale per evitare problemi d'ordine
         upd = Update.de_json(data, application.bot)
@@ -70,7 +92,7 @@ def webhook():
         import asyncio
         asyncio.run_coroutine_threadsafe(application.process_update(upd), bot_event_loop)
     except Exception as e:
-        print(f"[ERROR] Webhook error: {e}", flush=True)
+        print(f"[ERROR] process_update failed: {e}", flush=True)
         return "error", 500
 
     return "ok", 200
