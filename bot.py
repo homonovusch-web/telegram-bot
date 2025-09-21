@@ -1,9 +1,13 @@
-from flask import Flask, request
+from flask import Flask, request, abort
 import os
 import time
 
 # ================== CONFIG ==================
-TOKEN = "8458591477:AAGqIzFaYe-3DtWc45r24-hQPYyH4P4SIzY"
+# ⚠️ NON mettere segreti in chiaro nel codice. Leggili da ENV su Render.
+TOKEN = os.environ["TOKEN"]                      # es.: 8458...:AA...
+TG_SECRET = os.environ["TG_SECRET"]              # es.: hex di 64 char
+WEBHOOK_PATH = os.environ.get("WEBHOOK_PATH", "/webhook")  # es.: /webhook-97f729a6407f517b
+
 ADMIN_ID = 5749973037
 DB_PATH = "utenti.db"
 MEDIA_DIR = "media"
@@ -13,7 +17,6 @@ os.makedirs(MEDIA_DIR, exist_ok=True)
 
 # Inizializza Flask PRIMA delle route
 app = Flask(__name__)
-WEBHOOK_URL = f"https://{os.environ.get('RENDER_EXTERNAL_HOSTNAME', 'localhost')}/{TOKEN}"
 
 # Queste variabili verranno valorizzate nel MAIN LOOP (più sotto nel file)
 application = None
@@ -33,13 +36,20 @@ def ping():
     return "pong"
 
 # ------------------- webhook Telegram -------------------
-@app.route(f"/{TOKEN}", methods=["POST"])
+# Espone il percorso preso da WEBHOOK_PATH (es.: /webhook-97f729a6407f517b)
+@app.post(WEBHOOK_PATH)
 def webhook():
-    data = request.get_json(force=True)
+    # Blindatura: accetta solo richieste con il secret corretto
+    if request.headers.get("X-Telegram-Bot-Api-Secret-Token") != TG_SECRET:
+        print("[SECURITY] Secret header mismatch → 401", flush=True)
+        abort(401)
+
+    # JSON dell'update
+    data = request.get_json(silent=True)
     if not data:
         return "no data", 400
 
-    # Se vuoi loggare in modo più dettagliato l'update:
+    # Log minimale delle chiavi ricevute
     try:
         keys = list(data.keys()) if isinstance(data, dict) else str(type(data))
         print(f"[TG] Update ricevuto, keys={keys}", flush=True)
@@ -52,15 +62,15 @@ def webhook():
         print("[TG] Application non pronta: update scartato (503)", flush=True)
         return "not ready", 503
 
+    # Inoltra l'update al loop asincrono del bot (python-telegram-bot)
     try:
         from telegram import Update  # import locale per evitare problemi d'ordine
         upd = Update.de_json(data, application.bot)
 
         import asyncio
-        # Inoltra l'update al loop asincrono del bot senza bloccare Flask
         asyncio.run_coroutine_threadsafe(application.process_update(upd), bot_event_loop)
     except Exception as e:
-        print(f"Webhook error: {e}", flush=True)
+        print(f"[ERROR] Webhook error: {e}", flush=True)
         return "error", 500
 
     return "ok", 200
