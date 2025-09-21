@@ -910,7 +910,7 @@ if __name__ == "__main__":
     async def start_bot():
         await application.initialize()
         await application.start()
-        await application.bot.set_webhook(WEBHOOK_URL)
+        #await application.bot.set_webhook(WEBHOOK_URL)
         print(f"✅ Webhook impostato su {WEBHOOK_URL}")
 
     def run_loop():
